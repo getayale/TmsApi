@@ -11,9 +11,12 @@ public class Student
     public decimal GPA { get; set; }
 
     public bool IsActive { get; set; } = true;
+public bool IsDeleted { get; set; } = false;
+
+    // Concurrency token
+    public uint Version { get; set; }
 
 
-    // One student can have many enrollments
     public ICollection<Enrollment> Enrollments { get; set; }
         = new List<Enrollment>();
 }

@@ -1,93 +1,127 @@
-using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
+using TmsApi.Data;
+using TmsApi.Entities;
 
 namespace TmsApi.Services;
 
 public class EnrollmentService : IEnrollmentService
 {
-    private readonly Dictionary<string, EnrollmentRecord> _store = new();
+    private readonly TmsDbContext _context;
     private readonly ILogger<EnrollmentService> _logger;
 
-    public EnrollmentService(ILogger<EnrollmentService> logger)
+    public EnrollmentService(
+        TmsDbContext context,
+        ILogger<EnrollmentService> logger)
     {
+        _context = context;
         _logger = logger;
     }
 
-    public Task<EnrollmentRecord> EnrollAsync(string studentId, string courseCode)
+
+    public async Task<IReadOnlyList<Enrollment>> GetAllAsync(
+        CancellationToken ct)
     {
-        // Check for duplicate enrollment
-        var existing = _store.Values
-            .FirstOrDefault(e =>
-                e.StudentId == studentId &&
-                e.CourseCode == courseCode);
-
-        if (existing is not null)
-        {
-            _logger.LogWarning(
-                "Duplicate enrollment attempt {StudentId} already in {CourseCode} (record {EnrollmentId})",
-                studentId,
-                courseCode,
-                existing.Id);
-
-            return Task.FromResult(existing);
-        }
-
-        var id = Guid.NewGuid().ToString("N")[..8];
-
-        var record = new EnrollmentRecord(
-            id,
-            studentId,
-            courseCode,
-            DateTime.UtcNow);
-
-        _store[id] = record;
-
-        _logger.LogInformation(
-            "Enrolled {StudentId} in {CourseCode} record {EnrollmentId}",
-            studentId,
-            courseCode,
-            id);
-
-        return Task.FromResult(record);
+        return await _context.Enrollments
+            .Include(e => e.Student)
+            .Include(e => e.Course)
+            .AsNoTracking()
+            .ToListAsync(ct);
     }
 
-    public Task<EnrollmentRecord?> GetByIdAsync(string id)
-    {
-        _store.TryGetValue(id, out var record);
 
-        if (record is null)
+    public async Task<Enrollment?> GetByIdAsync(
+        int id,
+        CancellationToken ct)
+    {
+        var enrollment = await _context.Enrollments
+            .Include(e => e.Student)
+            .Include(e => e.Course)
+            .FirstOrDefaultAsync(e => e.Id == id, ct);
+
+
+        if (enrollment is null)
         {
             _logger.LogWarning(
                 "Enrollment {EnrollmentId} not found",
                 id);
         }
 
-        return Task.FromResult(record);
+        return enrollment;
     }
 
-    public Task<IReadOnlyList<EnrollmentRecord>> GetAllAsync()
-    {
-        IReadOnlyList<EnrollmentRecord> all = _store.Values.ToList();
 
-        return Task.FromResult(all);
+    public async Task<Enrollment> CreateAsync(
+        Enrollment enrollment,
+        CancellationToken ct)
+    {
+        _context.Enrollments.Add(enrollment);
+
+        await _context.SaveChangesAsync(ct);
+
+
+        _logger.LogInformation(
+            "Created enrollment {EnrollmentId}",
+            enrollment.Id);
+
+
+        return enrollment;
     }
 
-    public Task<bool> DeleteAsync(string id)
-    {
-        var removed = _store.Remove(id);
 
-        if (removed)
-        {
-            _logger.LogInformation(
-                "Deleted enrollment {EnrollmentId}",
-                id);
-        }
-        else
+    public async Task<bool> DeleteAsync(
+        int id,
+        CancellationToken ct)
+    {
+        var enrollment =
+            await _context.Enrollments
+            .FirstOrDefaultAsync(e => e.Id == id, ct);
+
+
+        if (enrollment is null)
         {
             _logger.LogWarning(
                 "Delete failed enrollment {EnrollmentId} not found",
                 id);
+
+            return false;
         }
 
-        return Task.FromResult(removed);
+
+        _context.Enrollments.Remove(enrollment);
+
+        await _context.SaveChangesAsync(ct);
+
+
+        _logger.LogInformation(
+            "Deleted enrollment {EnrollmentId}",
+            id);
+
+
+        return true;
+    }
+
+
+    // Exercise 9: Bulk archive
+    public async Task<int> ArchiveOldEnrollmentsAsync(
+        DateTime cutoff,
+        CancellationToken ct)
+    {
+        var affectedRows =
+            await _context.Enrollments
+                .Where(e => e.EnrolledAt < cutoff)
+                .ExecuteUpdateAsync(
+                    update => update
+                        .SetProperty(
+                            e => e.IsArchived,
+                            true),
+                    ct);
+
+
+        _logger.LogInformation(
+            "Archived {Count} old enrollments",
+            affectedRows);
+
+
+        return affectedRows;
     }
 }

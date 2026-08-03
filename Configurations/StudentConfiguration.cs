@@ -11,17 +11,22 @@ public class StudentConfiguration : IEntityTypeConfiguration<Student>
         builder.HasKey(s => s.Id);
 
         builder.Property(s => s.RegistrationNumber)
-            .IsRequired()
-            .HasMaxLength(50);
+            .IsRequired();
 
         builder.Property(s => s.Name)
-            .IsRequired()
-            .HasMaxLength(100);
+            .IsRequired();
 
         builder.Property(s => s.GPA)
             .HasPrecision(3, 2);
 
-        builder.Property(s => s.IsActive)
-            .HasDefaultValue(true);
+
+       
+        builder.Property<DateTime>("LastUpdated")
+            .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+
+       
+        builder.Property(s => s.Version)
+            .IsRowVersion();
     }
 }
