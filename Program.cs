@@ -1,41 +1,77 @@
+using Scalar.AspNetCore;
+using TmsApi.Exceptions;
 using TmsApi.Middleware;
-using TmsApi.Services;
 using TmsApi.Options;
+using TmsApi.Services;
 
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddAuthentication("Bearer");
+
+builder.Services.AddControllers();
+
+
+builder.Services.AddAuthentication();
 builder.Services.AddAuthorization();
 
+
+builder.Services.AddOpenApi();
+
+
 builder.Services.AddProblemDetails();
-builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
+
 
 builder.Services.AddOptions<PaymentOptions>()
     .BindConfiguration("Payments")
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
+
+builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
+
+
+
+
 var app = builder.Build();
+
+
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+    app.MapScalarApiReference();
+}
+else
+{
+    app.UseExceptionHandler();
+}
+
 
 app.UseMiddleware<RequestLoggingMiddleware>();
 
-app.UseExceptionHandler();
+
+app.UseStatusCodePages();
+
 
 app.UseHttpsRedirection();
 
+
 app.UseRouting();
 
-app.UseAuthentication();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/api/assessments/results", () => Results.Ok(new
+
+app.MapControllers();
+
+
+app.MapGet("/api/error", () =>
 {
-    courseCode = "CS-101",
-    studentId = "S-001",
-    letterGrade = "A"
-}))
-.RequireAuthorization();
+    throw new TmsDatabaseException(
+        "Simulated database failure for ProblemDetails testing");
+});
+
+
 
 app.Run();
