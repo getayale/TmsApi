@@ -1,20 +1,31 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Routing;
 using TmsApi.DTOs;
 using TmsApi.Services;
-
 
 namespace TmsApi.Controllers;
 
 
 [ApiController]
 [Route("api/courses")]
+[Tags("Courses")]
+[Produces("application/json")]
+[ProducesResponseType(
+    typeof(ProblemDetails),
+    StatusCodes.Status500InternalServerError)]
 public class CoursesController(
-    ICourseService courseService) : ControllerBase
+    ICourseService courseService,
+    LinkGenerator linkGenerator) : ControllerBase
 {
 
 
-    // GET ALL
     [HttpGet]
+    [ProducesResponseType(
+        typeof(PagedResponse<CourseResponseDto>),
+        StatusCodes.Status200OK)]
+    [EndpointSummary("List courses with pagination")]
+    [EndpointDescription(
+        "Returns a paginated, optionally filtered list of TMS courses. PageSize is capped at 50.")]
     public async Task<IActionResult> GetCourses(
         [FromQuery] PagedRequest request,
         CancellationToken ct)
@@ -27,9 +38,18 @@ public class CoursesController(
 
 
 
-    // GET BY ID
+
     [HttpGet("{id:int}",
         Name = nameof(GetCourseById))]
+    [ProducesResponseType(
+        typeof(CourseDetailDto),
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        typeof(ProblemDetails),
+        StatusCodes.Status404NotFound)]
+    [EndpointSummary("Get a course by ID")]
+    [EndpointDescription(
+        "Returns course details with HATEOAS links. Returns 404 if the course does not exist.")]
     public async Task<IActionResult> GetCourseById(
         int id,
         CancellationToken ct)
@@ -45,23 +65,37 @@ public class CoursesController(
 
 
 
-    // CREATE
+
+
     [HttpPost]
+    [ProducesResponseType(
+        typeof(CourseResponseDto),
+        StatusCodes.Status201Created)]
+    [ProducesResponseType(
+        typeof(ValidationProblemDetails),
+        StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(
+        typeof(ProblemDetails),
+        StatusCodes.Status409Conflict)]
+    [EndpointSummary("Create a new course")]
+    [EndpointDescription(
+        "Creates a course with a unique code. Returns 409 if the course code already exists.")]
     public async Task<IActionResult> CreateCourse(
         CreateCourseRequest request,
         CancellationToken ct)
     {
 
-        if(await courseService.CodeExistsAsync(
-            request.Code, ct))
+        if (await courseService.CodeExistsAsync(
+            request.Code,
+            ct))
         {
             return Conflict(new ProblemDetails
             {
                 Title = "Course code already exists",
                 Detail =
-                $"A course with code '{request.Code}' already exists.",
+                    $"A course with code '{request.Code}' already exists.",
                 Status =
-                StatusCodes.Status409Conflict
+                    StatusCodes.Status409Conflict
             });
         }
 
@@ -72,40 +106,35 @@ public class CoursesController(
 
         return CreatedAtAction(
             nameof(GetCourseById),
-            new { id = result.Id },
+            new
+            {
+                id = result.Id
+            },
             result);
     }
 
 
 
 
-    // UPDATE
+
     [HttpPut("{id:int}")]
+    [ProducesResponseType(
+        typeof(CourseResponseDto),
+        StatusCodes.Status200OK)]
+    [ProducesResponseType(
+        typeof(ProblemDetails),
+        StatusCodes.Status404NotFound)]
+    [ProducesResponseType(
+        typeof(ProblemDetails),
+        StatusCodes.Status409Conflict)]
+    [EndpointSummary("Update a course")]
+    [EndpointDescription(
+        "Updates an existing course.")]
     public async Task<IActionResult> UpdateCourse(
         int id,
         UpdateCourseRequest request,
         CancellationToken ct)
     {
-
-        var exists =
-            await courseService.CodeExistsAsync(
-                request.Code,
-                ct);
-
-
-        if(exists)
-        {
-            return Conflict(new ProblemDetails
-            {
-                Title = "Course code already exists",
-                Detail =
-                $"Code '{request.Code}' is already used.",
-                Status =
-                StatusCodes.Status409Conflict
-            });
-        }
-
-
         var result =
             await courseService.UpdateAsync(
                 id,
@@ -121,13 +150,20 @@ public class CoursesController(
 
 
 
-    // DELETE
+
     [HttpDelete("{id:int}")]
+    [ProducesResponseType(
+        StatusCodes.Status204NoContent)]
+    [ProducesResponseType(
+        typeof(ProblemDetails),
+        StatusCodes.Status404NotFound)]
+    [EndpointSummary("Delete a course")]
+    [EndpointDescription(
+        "Deletes an existing course by ID.")]
     public async Task<IActionResult> DeleteCourse(
         int id,
         CancellationToken ct)
     {
-
         var deleted =
             await courseService.DeleteAsync(id, ct);
 
@@ -136,5 +172,4 @@ public class CoursesController(
             ? NoContent()
             : NotFound();
     }
-
 }

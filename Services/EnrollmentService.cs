@@ -11,7 +11,7 @@ public class EnrollmentService(
     : IEnrollmentService
 {
 
-    public async Task<IReadOnlyList<EnrollmentResponseDto>> GetAllAsync(
+    public async Task<IReadOnlyList<EnrollmentResponseDto>> GetByCourseAsync(
         int courseId,
         CancellationToken ct)
     {
@@ -116,7 +116,6 @@ public class EnrollmentService(
             id,
             ct);
     }
-
 
 
 

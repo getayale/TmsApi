@@ -4,7 +4,7 @@ namespace TmsApi.Services;
 
 public interface IEnrollmentService
 {
-    Task<IReadOnlyList<EnrollmentResponseDto>> GetAllAsync(
+    Task<IReadOnlyList<EnrollmentResponseDto>> GetByCourseAsync(
         int courseId,
         CancellationToken ct);
 
