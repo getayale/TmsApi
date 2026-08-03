@@ -8,7 +8,7 @@ public class Course
 
     public required string Title { get; set; }
 
-    public int Capacity { get; set; }
+    public int MaxCapacity { get; set; }
 
 
     // One course can have many enrollments

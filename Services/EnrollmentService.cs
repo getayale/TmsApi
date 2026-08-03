@@ -1,127 +1,153 @@
 using Microsoft.EntityFrameworkCore;
 using TmsApi.Data;
+using TmsApi.Dtos;
 using TmsApi.Entities;
 
 namespace TmsApi.Services;
 
-public class EnrollmentService : IEnrollmentService
+public class EnrollmentService(
+    TmsDbContext context,
+    ILogger<EnrollmentService> logger)
+    : IEnrollmentService
 {
-    private readonly TmsDbContext _context;
-    private readonly ILogger<EnrollmentService> _logger;
 
-    public EnrollmentService(
-        TmsDbContext context,
-        ILogger<EnrollmentService> logger)
-    {
-        _context = context;
-        _logger = logger;
-    }
-
-
-    public async Task<IReadOnlyList<Enrollment>> GetAllAsync(
+    public async Task<IReadOnlyList<EnrollmentResponseDto>> GetAllAsync(
+        int courseId,
         CancellationToken ct)
     {
-        return await _context.Enrollments
-            .Include(e => e.Student)
-            .Include(e => e.Course)
+        return await context.Enrollments
             .AsNoTracking()
+            .Where(e => e.CourseId == courseId)
+            .Select(e => new EnrollmentResponseDto(
+                e.Id,
+                e.CourseId,
+                e.StudentId,
+                e.EnrolledAt))
             .ToListAsync(ct);
     }
 
 
-    public async Task<Enrollment?> GetByIdAsync(
+
+    public async Task<EnrollmentResponseDto?> GetByIdAsync(
+        int courseId,
         int id,
         CancellationToken ct)
     {
-        var enrollment = await _context.Enrollments
-            .Include(e => e.Student)
-            .Include(e => e.Course)
-            .FirstOrDefaultAsync(e => e.Id == id, ct);
+        return await context.Enrollments
+            .AsNoTracking()
+            .Where(e =>
+                e.CourseId == courseId &&
+                e.Id == id)
+            .Select(e => new EnrollmentResponseDto(
+                e.Id,
+                e.CourseId,
+                e.StudentId,
+                e.EnrolledAt))
+            .FirstOrDefaultAsync(ct);
+    }
+
+
+
+    public async Task<EnrollmentResponseDto> CreateAsync(
+        int courseId,
+        EnrollStudentRequest request,
+        CancellationToken ct)
+    {
+        var enrollment = new Enrollment
+        {
+            CourseId = courseId,
+            StudentId = request.StudentId,
+            EnrolledAt = DateTime.UtcNow
+        };
+
+
+        context.Enrollments.Add(enrollment);
+
+        await context.SaveChangesAsync(ct);
+
+
+        logger.LogInformation(
+            "Created enrollment {EnrollmentId} for Course {CourseId} and Student {StudentId}",
+            enrollment.Id,
+            courseId,
+            request.StudentId);
+
+
+        return (await GetByIdAsync(
+            courseId,
+            enrollment.Id,
+            ct))!;
+    }
+
+
+
+    public async Task<EnrollmentResponseDto?> UpdateAsync(
+        int courseId,
+        int id,
+        UpdateEnrollmentRequest request,
+        CancellationToken ct)
+    {
+        var enrollment = await context.Enrollments
+            .FirstOrDefaultAsync(
+                e => e.CourseId == courseId &&
+                     e.Id == id,
+                ct);
 
 
         if (enrollment is null)
         {
-            _logger.LogWarning(
-                "Enrollment {EnrollmentId} not found",
-                id);
+            return null;
         }
 
-        return enrollment;
-    }
+
+        enrollment.StudentId = request.StudentId;
 
 
-    public async Task<Enrollment> CreateAsync(
-        Enrollment enrollment,
-        CancellationToken ct)
-    {
-        _context.Enrollments.Add(enrollment);
-
-        await _context.SaveChangesAsync(ct);
+        await context.SaveChangesAsync(ct);
 
 
-        _logger.LogInformation(
-            "Created enrollment {EnrollmentId}",
+        logger.LogInformation(
+            "Updated enrollment {EnrollmentId}",
             enrollment.Id);
 
 
-        return enrollment;
+        return await GetByIdAsync(
+            courseId,
+            id,
+            ct);
     }
 
 
+
+
     public async Task<bool> DeleteAsync(
+        int courseId,
         int id,
         CancellationToken ct)
     {
-        var enrollment =
-            await _context.Enrollments
-            .FirstOrDefaultAsync(e => e.Id == id, ct);
+        var enrollment = await context.Enrollments
+            .FirstOrDefaultAsync(
+                e => e.CourseId == courseId &&
+                     e.Id == id,
+                ct);
 
 
         if (enrollment is null)
         {
-            _logger.LogWarning(
-                "Delete failed enrollment {EnrollmentId} not found",
-                id);
-
             return false;
         }
 
 
-        _context.Enrollments.Remove(enrollment);
+        context.Enrollments.Remove(enrollment);
 
-        await _context.SaveChangesAsync(ct);
+        await context.SaveChangesAsync(ct);
 
 
-        _logger.LogInformation(
+        logger.LogInformation(
             "Deleted enrollment {EnrollmentId}",
-            id);
+            enrollment.Id);
 
 
         return true;
-    }
-
-
-    // Exercise 9: Bulk archive
-    public async Task<int> ArchiveOldEnrollmentsAsync(
-        DateTime cutoff,
-        CancellationToken ct)
-    {
-        var affectedRows =
-            await _context.Enrollments
-                .Where(e => e.EnrolledAt < cutoff)
-                .ExecuteUpdateAsync(
-                    update => update
-                        .SetProperty(
-                            e => e.IsArchived,
-                            true),
-                    ct);
-
-
-        _logger.LogInformation(
-            "Archived {Count} old enrollments",
-            affectedRows);
-
-
-        return affectedRows;
     }
 }

@@ -35,6 +35,8 @@ builder.Services.AddOptions<PaymentOptions>()
 
 builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
 builder.Services.AddScoped<IReportingService, ReportingService>();
+builder.Services.AddScoped<ICourseService, CourseService>();
+builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
 
 builder.Services.AddDbContext<TmsDbContext>(options =>
     options.UseNpgsql(
@@ -112,7 +114,7 @@ using (var scope = app.Services.CreateScope())
             {
                 Code="CS-101",
                 Title="Introduction to Computer Science",
-                Capacity=30
+                MaxCapacity=30
             }
         };
 
