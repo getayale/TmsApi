@@ -3,6 +3,12 @@ using TmsApi.Exceptions;
 using TmsApi.Middleware;
 using TmsApi.Options;
 using TmsApi.Services;
+using Microsoft.EntityFrameworkCore;
+using TmsApi.Data;
+using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
+using TmsApi.Data;
+using TmsApi.Entities;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -29,7 +35,11 @@ builder.Services.AddOptions<PaymentOptions>()
 
 builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
 
-
+builder.Services.AddDbContext<TmsDbContext>(options =>
+    options.UseNpgsql(
+        builder.Configuration.GetConnectionString("TmsDatabase"))
+    .LogTo(Console.WriteLine, LogLevel.Information)
+    .EnableSensitiveDataLogging());
 
 
 var app = builder.Build();
@@ -66,11 +76,50 @@ app.UseAuthorization();
 app.MapControllers();
 
 
-app.MapGet("/api/error", () =>
+using (var scope = app.Services.CreateScope())
 {
-    throw new TmsDatabaseException(
-        "Simulated database failure for ProblemDetails testing");
-});
+    var context = scope.ServiceProvider
+        .GetRequiredService<TmsDbContext>();
+
+    context.Database.Migrate();
+
+    if (!context.Students.Any())
+    {
+        var students = new List<Student>
+        {
+            new()
+            {
+                RegistrationNumber = "TMS-2026-0001",
+                Name = "Alice Smith",
+                GPA = 3.8m,
+                IsActive = true
+            },
+            new()
+            {
+                RegistrationNumber = "TMS-2026-0002",
+                Name = "Bob Jones",
+                GPA = 2.9m,
+                IsActive = true
+            }
+        };
+
+        context.Students.AddRange(students);
+
+        var courses = new List<Course>
+        {
+            new()
+            {
+                Code="CS-101",
+                Title="Introduction to Computer Science",
+                Capacity=30
+            }
+        };
+
+        context.Courses.AddRange(courses);
+
+        context.SaveChanges();
+    }
+}
 
 
 
