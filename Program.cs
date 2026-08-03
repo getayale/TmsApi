@@ -1,4 +1,7 @@
 using TmsApi.Middleware;
+using TmsApi.Services;
+using TmsApi.Options;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -6,6 +9,12 @@ builder.Services.AddAuthentication("Bearer");
 builder.Services.AddAuthorization();
 
 builder.Services.AddProblemDetails();
+builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
+
+builder.Services.AddOptions<PaymentOptions>()
+    .BindConfiguration("Payments")
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
 var app = builder.Build();
 
