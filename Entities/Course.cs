@@ -10,6 +10,8 @@ public class Course
 
     public int Capacity { get; set; }
 
-    // Navigation property
-    public ICollection<Enrollment> Enrollments { get; set; } = new List<Enrollment>();
+
+    // One course can have many enrollments
+    public ICollection<Enrollment> Enrollments { get; set; }
+        = new List<Enrollment>();
 }

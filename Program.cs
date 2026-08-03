@@ -6,8 +6,8 @@ using TmsApi.Services;
 using Microsoft.EntityFrameworkCore;
 using TmsApi.Data;
 using Microsoft.Extensions.Logging;
-using Microsoft.EntityFrameworkCore;
-using TmsApi.Data;
+
+
 using TmsApi.Entities;
 
 
@@ -34,6 +34,7 @@ builder.Services.AddOptions<PaymentOptions>()
 
 
 builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
+builder.Services.AddScoped<IReportingService, ReportingService>();
 
 builder.Services.AddDbContext<TmsDbContext>(options =>
     options.UseNpgsql(

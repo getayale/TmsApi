@@ -12,6 +12,8 @@ public class Student
 
     public bool IsActive { get; set; } = true;
 
-    // Navigation property
-    public ICollection<Enrollment> Enrollments { get; set; } = new List<Enrollment>();
+
+    // One student can have many enrollments
+    public ICollection<Enrollment> Enrollments { get; set; }
+        = new List<Enrollment>();
 }
