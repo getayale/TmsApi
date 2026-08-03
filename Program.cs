@@ -6,15 +6,17 @@ using TmsApi.Services;
 using Microsoft.EntityFrameworkCore;
 using TmsApi.Data;
 using Microsoft.Extensions.Logging;
+using TmsApi.Filters;
 
-
-using TmsApi.Entities;
 
 
 var builder = WebApplication.CreateBuilder(args);
 
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<AuditLogFilter>();
+});
 
 
 builder.Services.AddAuthentication();
@@ -36,7 +38,7 @@ builder.Services.AddOptions<PaymentOptions>()
 builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
 builder.Services.AddScoped<IReportingService, ReportingService>();
 builder.Services.AddScoped<ICourseService, CourseService>();
-builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
+
 
 builder.Services.AddDbContext<TmsDbContext>(options =>
     options.UseNpgsql(
@@ -46,7 +48,6 @@ builder.Services.AddDbContext<TmsDbContext>(options =>
 
 
 var app = builder.Build();
-
 
 
 if (app.Environment.IsDevelopment())
@@ -79,51 +80,15 @@ app.UseAuthorization();
 app.MapControllers();
 
 
-using (var scope = app.Services.CreateScope())
+if (app.Environment.IsDevelopment())
 {
+    using var scope = app.Services.CreateScope();
+
     var context = scope.ServiceProvider
         .GetRequiredService<TmsDbContext>();
 
-    context.Database.Migrate();
-
-    if (!context.Students.Any())
-    {
-        var students = new List<Student>
-        {
-            new()
-            {
-                RegistrationNumber = "TMS-2026-0001",
-                Name = "Alice Smith",
-                GPA = 3.8m,
-                IsActive = true
-            },
-            new()
-            {
-                RegistrationNumber = "TMS-2026-0002",
-                Name = "Bob Jones",
-                GPA = 2.9m,
-                IsActive = true
-            }
-        };
-
-        context.Students.AddRange(students);
-
-        var courses = new List<Course>
-        {
-            new()
-            {
-                Code="CS-101",
-                Title="Introduction to Computer Science",
-                MaxCapacity=30
-            }
-        };
-
-        context.Courses.AddRange(courses);
-
-        context.SaveChanges();
-    }
+    await DataSeeder.SeedAsync(context);
 }
-
 
 
 app.Run();

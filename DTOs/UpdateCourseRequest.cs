@@ -1,0 +1,21 @@
+using System.ComponentModel.DataAnnotations;
+
+namespace TmsApi.DTOs;
+
+public record UpdateCourseRequest
+{
+    [Required]
+    [RegularExpression(
+        @"^[A-Z]{3}-\d{3}$",
+        ErrorMessage = "Code must follow XXX-000 format.")]
+    public required string Code { get; init; }
+
+
+    [Required]
+    [MaxLength(200)]
+    public required string Title { get; init; }
+
+
+    [Range(1, 200)]
+    public int MaxCapacity { get; init; }
+}
