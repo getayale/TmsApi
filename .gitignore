@@ -30,3 +30,4 @@ Thumbs.db
 
 # Secrets
 appsettings.Development.json
+TmsApi.Api/appsettings.Development.json
