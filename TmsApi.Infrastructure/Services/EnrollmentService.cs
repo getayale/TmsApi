@@ -12,6 +12,26 @@ public class EnrollmentService(
     : IEnrollmentService
 {
 
+    public async Task<IReadOnlyList<EnrollmentListDto>> GetAllAsync(
+    CancellationToken ct)
+{
+    return await context.Enrollments
+        .AsNoTracking()
+        .Include(e => e.Student)
+        .Include(e => e.Course)
+        .Select(e => new EnrollmentListDto(
+            e.Id,
+            e.StudentId,
+            e.Student.Name,
+            e.CourseId,
+            e.Course.Code,
+            e.Course.Title,
+            e.EnrolledAt,
+            e.Status
+        ))
+        .ToListAsync(ct);
+}
+
     public async Task<IReadOnlyList<EnrollmentResponseDto>> GetByCourseAsync(
         int courseId,
         CancellationToken ct)
@@ -23,7 +43,8 @@ public class EnrollmentService(
                 e.Id,
                 e.CourseId,
                 e.StudentId,
-                e.EnrolledAt))
+                e.EnrolledAt,
+                e.Status))
             .ToListAsync(ct);
     }
 
@@ -43,7 +64,8 @@ public class EnrollmentService(
                 e.Id,
                 e.CourseId,
                 e.StudentId,
-                e.EnrolledAt))
+                e.EnrolledAt,
+                e.Status))
             .FirstOrDefaultAsync(ct);
     }
 
@@ -150,4 +172,51 @@ public class EnrollmentService(
 
         return true;
     }
+    public async Task<bool> ExistsAsync(
+    int studentId,
+    string courseCode,
+    CancellationToken ct)
+{
+    return await context.Enrollments
+        .AnyAsync(e =>
+            e.StudentId == studentId &&
+            e.Course.Code == courseCode,
+            ct);
+}
+public async Task AddAsync(
+    Enrollment enrollment,
+    CancellationToken ct)
+{
+    await context.Enrollments.AddAsync(
+        enrollment,
+        ct);
+
+    await context.SaveChangesAsync(ct);
+}
+public async Task<IReadOnlyList<Enrollment>> GetByStudentIdAsync(
+    int studentId,
+    CancellationToken ct)
+{
+    return await context.Enrollments
+        .Include(e => e.Course)
+        .Where(e => e.StudentId == studentId)
+        .AsNoTracking()
+        .ToListAsync(ct);
+}
+
+public async Task<Enrollment?> GetEntityByIdAsync(
+    int enrollmentId,
+    CancellationToken ct)
+{
+    return await context.Enrollments
+        .FirstOrDefaultAsync(
+            e => e.Id == enrollmentId,
+            ct);
+}
+
+public async Task SaveChangesAsync(
+    CancellationToken ct)
+{
+    await context.SaveChangesAsync(ct);
+}
 }

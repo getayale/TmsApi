@@ -1,3 +1,4 @@
+using TmsApi.Domain.Enums;
 namespace TmsApi.Domain.Entities;
 
 public class Enrollment
@@ -16,7 +17,7 @@ public bool IsArchived { get; set; } = false;
         = DateTime.UtcNow;
 
 
-
+public EnrollmentStatus Status { get; set; } = EnrollmentStatus.Pending;
     // Navigation to Student
     public Student Student { get; set; } = null!;
 

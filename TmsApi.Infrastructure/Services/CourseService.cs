@@ -231,7 +231,16 @@ public class CourseService(
 
 
 
-
+public async Task<Course?> GetByCodeAsync(
+    string code,
+    CancellationToken ct)
+{
+    return await context.Courses
+        .Include(c => c.Enrollments)
+        .FirstOrDefaultAsync(
+            c => c.Code == code,
+            ct);
+}
 
 
 
@@ -246,5 +255,14 @@ public class CourseService(
                 c => c.Code == code,
                 ct);
     }
+
+    public async Task<IReadOnlyList<Course>> GetAllAsync(
+    CancellationToken ct)
+{
+    return await context.Courses
+        .AsNoTracking()
+        .Include(c => c.Enrollments)
+        .ToListAsync(ct);
+}
 
 }
