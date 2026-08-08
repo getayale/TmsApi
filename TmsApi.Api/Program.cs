@@ -3,30 +3,33 @@ using FluentValidation;
 using MediatR;
 using Scalar.AspNetCore;
 using System.Text.Json.Serialization;
+using System.Threading.Channels;
+using System.Threading.RateLimiting;
+
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Hybrid;
 
 using TmsApi.Api.ExceptionHandlers;
 using TmsApi.Api.Filters;
+using TmsApi.Api.Hubs;
 using TmsApi.Api.Middleware;
+using TmsApi.Api.Notifications;
 using TmsApi.Api.Options;
+using TmsApi.Api.RateLimiting;
 
 using TmsApi.Application.Behaviors;
 using TmsApi.Application.Enrollments.Commands;
 using TmsApi.Application.Interfaces;
+using TmsApi.Application.Notifications;
+using TmsApi.Application.Transcripts;
 
 using TmsApi.Infrastructure.Persistence;
 using TmsApi.Infrastructure.Services;
-
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Caching.Hybrid;
-
-using System.Threading.RateLimiting;
-using Microsoft.AspNetCore.RateLimiting;
-using TmsApi.Api.RateLimiting;
-
+using TmsApi.Infrastructure.Transcripts;
+using TmsApi.Infrastructure.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
-
 
 builder.Services.AddControllers(options =>
 {
@@ -35,10 +38,8 @@ builder.Services.AddControllers(options =>
 .AddJsonOptions(options =>
 {
     options.JsonSerializerOptions.Converters.Add(
-        new System.Text.Json.Serialization.JsonStringEnumConverter());
+        new JsonStringEnumConverter());
 });
-
-
 
 builder.Services.AddApiVersioning(options =>
 {
@@ -59,12 +60,8 @@ builder.Services.AddApiVersioning(options =>
     options.SubstituteApiVersionInUrl = true;
 });
 
-
-
 builder.Services.AddAuthentication();
 builder.Services.AddAuthorization();
-
-
 
 builder.Services.AddOpenApi("v1", options =>
 {
@@ -72,16 +69,16 @@ builder.Services.AddOpenApi("v1", options =>
         description.GroupName == "v1";
 });
 
-
 builder.Services.AddOpenApi("v2", options =>
 {
     options.ShouldInclude = description =>
         description.GroupName == "v2";
 });
 
-
-
 builder.Services.AddProblemDetails();
+
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+
 builder.Services.AddHybridCache(options =>
 {
     options.DefaultEntryOptions = new HybridCacheEntryOptions
@@ -91,37 +88,26 @@ builder.Services.AddHybridCache(options =>
     };
 });
 
-builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-
-
-
 builder.Services.AddMediatR(cfg =>
 {
     cfg.RegisterServicesFromAssembly(
         typeof(EnrollStudentCommand).Assembly);
 
-
-  
     cfg.AddOpenBehavior(
         typeof(LoggingBehavior<,>));
-
 
     cfg.AddOpenBehavior(
         typeof(ValidationBehavior<,>));
 });
 
-
-
 builder.Services.AddValidatorsFromAssembly(
     typeof(EnrollStudentValidator).Assembly);
 
-
-
-builder.Services.AddOptions<PaymentOptions>()
+builder.Services
+    .AddOptions<PaymentOptions>()
     .BindConfiguration("Payments")
     .ValidateDataAnnotations()
     .ValidateOnStart();
-
 
 builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
 builder.Services.AddScoped<IReportingService, ReportingService>();
@@ -132,20 +118,44 @@ builder.Services.AddTransient(
     typeof(IPipelineBehavior<,>),
     typeof(LoggingBehavior<,>));
 
-
 builder.Services.AddTransient(
     typeof(IPipelineBehavior<,>),
     typeof(ValidationBehavior<,>));
 
-builder.Services.AddDbContext<TmsDbContext>(options =>
-    options.UseNpgsql(
-        builder.Configuration.GetConnectionString("TmsDatabase"))
-    .LogTo(Console.WriteLine, LogLevel.Information)
-    .EnableSensitiveDataLogging());
+builder.Services.AddSingleton<
+    ITranscriptStatusStore,
+    InMemoryTranscriptStatusStore>();
 
-    builder.Services.AddCors(options =>
+builder.Services.AddSingleton<
+    Channel<TranscriptRequest>>(sp =>
+    Channel.CreateBounded<TranscriptRequest>(
+        new BoundedChannelOptions(100)
+        {
+            FullMode = BoundedChannelFullMode.Wait
+        }));
+
+builder.Services.AddHostedService<TranscriptWorker>();
+
+builder.Services.AddSignalR();
+
+builder.Services.AddSingleton<
+    ITranscriptNotificationService,
+    SignalRTranscriptNotificationService>();
+
+builder.Services.AddDbContext<TmsDbContext>(options =>
 {
-    options.AddPolicy("AngularClient",
+    options.UseNpgsql(
+        builder.Configuration.GetConnectionString("TmsDatabase"));
+
+    options
+        .LogTo(Console.WriteLine, LogLevel.Information)
+        .EnableSensitiveDataLogging();
+});
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(
+        "AngularClient",
         policy =>
         {
             policy
@@ -164,10 +174,8 @@ builder.Services.AddRateLimiter(options =>
                 var (partitionKey, tier) =
                     ApiKeyResolver.Resolve(httpContext);
 
-
                 return tier switch
                 {
-
                     ApiKeyTier.Paid =>
                         RateLimitPartition.GetTokenBucketLimiter(
                             $"paid:{partitionKey}",
@@ -181,7 +189,6 @@ builder.Services.AddRateLimiter(options =>
                                 AutoReplenishment = true
                             }),
 
-
                     ApiKeyTier.Free =>
                         RateLimitPartition.GetTokenBucketLimiter(
                             $"free:{partitionKey}",
@@ -194,7 +201,6 @@ builder.Services.AddRateLimiter(options =>
                                 QueueLimit = 0,
                                 AutoReplenishment = true
                             }),
-
 
                     _ =>
                         RateLimitPartition.GetTokenBucketLimiter(
@@ -211,15 +217,22 @@ builder.Services.AddRateLimiter(options =>
                 };
             });
 
+    options.AddConcurrencyLimiter(
+        "transcripts",
+        opt =>
+        {
+            opt.PermitLimit = 5;
+            opt.QueueLimit = 20;
+            opt.QueueProcessingOrder =
+                QueueProcessingOrder.OldestFirst;
+        });
 
     options.RejectionStatusCode =
         StatusCodes.Status429TooManyRequests;
 
-
     options.OnRejected = async (context, ct) =>
     {
         var retryAfter = "10";
-
 
         if (context.Lease.TryGetMetadata(
             MetadataName.RetryAfter,
@@ -229,37 +242,29 @@ builder.Services.AddRateLimiter(options =>
                 ((int)retry.TotalSeconds).ToString();
         }
 
-
         context.HttpContext.Response.Headers.RetryAfter =
             retryAfter;
-
 
         context.HttpContext.Response.ContentType =
             "application/problem+json";
 
-
-        await context.HttpContext.Response
-            .WriteAsJsonAsync(
-                new
-                {
-                    title = "Rate limit exceeded",
-                    detail =
-                        $"Too many requests. Retry after {retryAfter} seconds.",
-                    status = 429,
-                    type =
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            new
+            {
+                title = "Rate limit exceeded",
+                detail =
+                    $"Too many requests. Retry after {retryAfter} seconds.",
+                status = 429,
+                type =
                     "https://tms.local/errors/rate_limit_exceeded"
-                },
-                ct);
+            },
+            ct);
     };
 });
 
-
 var app = builder.Build();
 
-
-
 app.UseExceptionHandler();
-
 
 if (app.Environment.IsDevelopment())
 {
@@ -274,37 +279,32 @@ if (app.Environment.IsDevelopment())
                 ScalarTarget.CSharp,
                 ScalarClient.HttpClient);
 
-
         options
             .AddDocument("v1", "API Version 1.0")
             .AddDocument("v2", "API Version 2.0");
     });
 }
 
-
 app.UseHttpsRedirection();
 
-
-
 app.UseMiddleware<RequestLoggingMiddleware>();
-
 app.UseMiddleware<V1DeprecationMiddleware>();
 
 app.UseStatusCodePages();
 
-
 app.UseRouting();
+
 app.UseCors("AngularClient");
 
 app.UseRateLimiter();
+
 app.UseAuthentication();
 
 app.UseAuthorization();
 
+app.MapHub<TmsHub>("/hubs/tms");
 
 app.MapControllers();
-
-
 
 if (app.Environment.IsDevelopment())
 {
@@ -315,6 +315,5 @@ if (app.Environment.IsDevelopment())
 
     await DataSeeder.SeedAsync(context);
 }
-
 
 app.Run();

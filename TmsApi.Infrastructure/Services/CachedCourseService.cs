@@ -4,9 +4,7 @@ using TmsApi.Application.DTOs;
 using TmsApi.Application.Interfaces;
 using TmsApi.Infrastructure.Caching;
 
-
 namespace TmsApi.Infrastructure.Services;
-
 
 public class CachedCourseService(
     HybridCache cache,
@@ -15,50 +13,45 @@ public class CachedCourseService(
     : ICachedCourseService
 {
 
-
     public async Task<IReadOnlyList<CourseResponseDto>> GetAllCoursesAsync(
         CancellationToken ct)
     {
-
         var key = CacheKeys.CoursesAll;
 
         var dbHit = false;
 
 
-        var courses =
-            await cache.GetOrCreateAsync(
-                key,
+        var courses = await cache.GetOrCreateAsync(
+            key,
 
-                service,
+            service,
 
-                async (state, token) =>
-                {
-                    dbHit = true;
+            async (state, token) =>
+            {
+                dbHit = true;
 
-
-                    logger.LogInformation(
-                        "Cache MISS for {Key} fetching from DB",
-                        key);
+                logger.LogInformation(
+                    "Cache MISS for {Key} fetching from DB",
+                    key);
 
 
-                    var result =
-                        await state.GetCoursesAsync(
-                            new PagedRequest
-                            {
-                                Page = 1,
-                                PageSize = 100
-                            },
-                            token);
+                var result =
+                    await state.GetCoursesAsync(
+                        new PagedRequest
+                        {
+                            Page = 1,
+                            PageSize = 100
+                        },
+                        token);
 
 
-                    return result.Items;
+                return result.Items;
 
+            },
 
-                },
+            tags: [CacheKeys.CoursesTag],
 
-                tags: [CacheKeys.CoursesTag],
-
-                cancellationToken: ct);
+            cancellationToken: ct);
 
 
 
@@ -75,7 +68,6 @@ public class CachedCourseService(
 
 
 
-
     public async Task<CourseResponseDto?> GetCourseAsync(
         string code,
         CancellationToken ct)
@@ -86,42 +78,40 @@ public class CachedCourseService(
         var dbHit = false;
 
 
-        var course =
-            await cache.GetOrCreateAsync(
-                key,
+        var course = await cache.GetOrCreateAsync(
+            key,
 
-                service,
+            (service, code),
 
-                async (state, token) =>
-                {
-
-                    dbHit = true;
+            async (state, token) =>
+            {
+                dbHit = true;
 
 
-                    logger.LogInformation(
-                        "Cache MISS for {Key}",
-                        key);
+                logger.LogInformation(
+                    "Cache MISS for {Key} fetching from DB",
+                    key);
 
 
 
-                    var courses =
-                        await state.GetCoursesAsync(
-                            new PagedRequest
-                            {
-                                Search = code
-                            },
-                            token);
+                var result =
+                    await state.service.GetCoursesAsync(
+                        new PagedRequest
+                        {
+                            Search = state.code
+                        },
+                        token);
 
 
-                    return courses.Items
-                        .FirstOrDefault();
 
+                return result.Items
+                    .FirstOrDefault();
 
-                },
+            },
 
-                tags: [CacheKeys.CoursesTag],
+            tags: [CacheKeys.CoursesTag],
 
-                cancellationToken: ct);
+            cancellationToken: ct);
 
 
 
@@ -138,6 +128,7 @@ public class CachedCourseService(
 
 
 
+
     public async Task InvalidateCourseCacheAsync(
         CancellationToken ct)
     {
@@ -147,9 +138,9 @@ public class CachedCourseService(
             CacheKeys.CoursesTag);
 
 
+
         await cache.RemoveByTagAsync(
             CacheKeys.CoursesTag,
             ct);
     }
-
 }

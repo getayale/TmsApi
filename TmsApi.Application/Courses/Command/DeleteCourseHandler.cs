@@ -25,8 +25,7 @@ public class DeleteCourseHandler(
         }
 
 
-        // IMPORTANT:
-        // remove stale cached courses
+       
         await cachedCourseService
             .InvalidateCourseCacheAsync(ct);
 
