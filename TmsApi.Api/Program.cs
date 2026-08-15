@@ -152,17 +152,22 @@ builder.Services.AddDbContext<TmsDbContext>(options =>
         .EnableSensitiveDataLogging();
 });
 
+var allowedOrigins = builder.Configuration
+    .GetSection("AllowedOrigins")
+    .Get<string[]>()
+    ?? ["http://localhost:4200"];
+
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy(
-        "AngularClient",
-        policy =>
-        {
-            policy
-                .WithOrigins("http://localhost:4200")
-                .AllowAnyHeader()
-                .AllowAnyMethod();
-        });
+    options.AddPolicy("TmsClient", policy =>
+    {
+        policy
+            .WithOrigins(allowedOrigins)
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials()
+            .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
+    });
 });
 
 builder.Services.AddRateLimiter(options =>
@@ -262,6 +267,9 @@ builder.Services.AddRateLimiter(options =>
     };
 });
 
+
+
+
 var app = builder.Build();
 
 app.UseExceptionHandler();
@@ -294,7 +302,7 @@ app.UseStatusCodePages();
 
 app.UseRouting();
 
-app.UseCors("AngularClient");
+app.UseCors("TmsClient");
 
 app.UseRateLimiter();
 

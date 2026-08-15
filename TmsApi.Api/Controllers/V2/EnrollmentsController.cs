@@ -1,22 +1,24 @@
 using Asp.Versioning;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
+
+using TmsApi.Api.Hubs;
 using TmsApi.Application.Enrollments.Commands;
 using TmsApi.Application.Enrollments.Queries;
+using TmsApi.Application.Hubs;
 using TmsApi.Application.Interfaces;
 
-
 namespace TmsApi.Api.Controllers.V2;
-
 
 [ApiController]
 [Route("api/v{version:apiVersion}/enrollments")]
 [ApiVersion("2.0")]
 public class EnrollmentsController(
     IMediator mediator,
-    IEnrollmentService enrollmentService) : ControllerBase
+    IEnrollmentService enrollmentService,
+    IHubContext<TmsHub, ITmsHubClient> hubContext) : ControllerBase
 {
-
     [HttpGet]
     public async Task<IActionResult> GetAll(
         CancellationToken ct)
@@ -26,15 +28,12 @@ public class EnrollmentsController(
         return Ok(enrollments);
     }
 
-
-
     [HttpPost]
     public async Task<IActionResult> Enroll(
         EnrollStudentCommand command,
         CancellationToken ct)
     {
         var result = await mediator.Send(command, ct);
-
 
         return result.Match<IActionResult>(
             onSuccess: created =>
@@ -46,7 +45,6 @@ public class EnrollmentsController(
                     },
                     created),
 
-
             onFailure: error =>
             {
                 var status = error.Code switch
@@ -54,15 +52,12 @@ public class EnrollmentsController(
                     "course_not_found" =>
                         StatusCodes.Status404NotFound,
 
-
                     "course_full" or "already_enrolled" =>
                         StatusCodes.Status409Conflict,
-
 
                     _ =>
                         StatusCodes.Status400BadRequest
                 };
-
 
                 return Problem(
                     statusCode: status,
@@ -71,8 +66,6 @@ public class EnrollmentsController(
                     type: $"https://tms.local/errors/{error.Code}");
             });
     }
-
-
 
     [HttpGet("{studentId}/schedule")]
     public async Task<IActionResult> GetSchedule(
@@ -83,32 +76,30 @@ public class EnrollmentsController(
             new GetStudentScheduleQuery(studentId),
             ct);
 
-
         return Ok(schedule);
     }
 
+    [HttpPost("{id:int}/approve")]
+    public async Task<IActionResult> Approve( int id,CancellationToken ct)
+    {
+        var result = await mediator.Send(new ApproveEnrollmentCommand(id),ct);
 
-   [HttpPost("{id:int}/approve")]
-public async Task<IActionResult> Approve(
-    int id,
-    CancellationToken ct)
-{
-    var result = await mediator.Send(
-        new ApproveEnrollmentCommand(id),
-        ct);
+        return await result.Match<Task<IActionResult>>(
+            onSuccess: async _ =>
+            {
+                await hubContext.Clients.All
+                    .ReceiveEnrollmentStatusUpdated(
+                        id.ToString(),
+                        "Approved");
 
+                return NoContent();
+            },
 
-    return result.Match<IActionResult>(
-
-        onSuccess: _ =>
-            NoContent(),
-
-        onFailure: error =>
-            Problem(
-                title: "Approval rejected",
-                detail: error.Message,
-                statusCode: 400
-            )
-    );
-}
+            onFailure: error =>
+                Task.FromResult<IActionResult>(
+                    Problem(
+                        title: "Approval rejected",
+                        detail: error.Message,
+                        statusCode: StatusCodes.Status400BadRequest)));
+    }
 }

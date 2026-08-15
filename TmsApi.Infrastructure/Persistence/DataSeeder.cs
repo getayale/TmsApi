@@ -5,6 +5,7 @@ namespace TmsApi.Infrastructure.Persistence;
 
 public static class DataSeeder
 {
+    
     private static readonly (string Code, string Title, int MaxCapacity)[] Courses =
     [
         ("CSE-101", "Web Development Fundamentals", 30),
