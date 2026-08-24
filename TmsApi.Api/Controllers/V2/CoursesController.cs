@@ -93,9 +93,42 @@ public class CoursesController(
     }
 
 
+[HttpGet("{id:int}")]
+public async Task<IActionResult> GetCourseById(
+    int id,
+    CancellationToken ct)
+{
+    var result = await mediator.Send(
+        new GetCourseByIdQuery(id),
+        ct);
 
-    // M7 Exercise 3 Step 8
-    // Update course + invalidate HybridCache
+    if (result is null)
+    {
+        return NotFound();
+    }
+
+    return Ok(result);
+}
+
+
+
+[HttpPost]
+public async Task<IActionResult> CreateCourse(
+    [FromBody] CreateCourseRequest request,
+    CancellationToken ct)
+{
+    var result = await mediator.Send(
+        new CreateCourseCommand(
+            request.Code,
+            request.Title,
+            request.MaxCapacity),
+        ct);
+
+    return CreatedAtAction(
+        nameof(GetCourseById),
+        new { id = result.Id, version = "2.0" },
+        result);
+}
 
     [HttpPut("{id:int}")]
     public async Task<IActionResult> UpdateCourse(
@@ -122,4 +155,22 @@ public class CoursesController(
 
         return NoContent();
     }
+
+
+    [HttpDelete("{id:int}")]
+public async Task<IActionResult> DeleteCourse(
+    int id,
+    CancellationToken ct)
+{
+    var result = await mediator.Send(
+        new DeleteCourseCommand(id),
+        ct);
+
+    if (!result)
+    {
+        return NotFound();
+    }
+
+    return NoContent();
+}
 }

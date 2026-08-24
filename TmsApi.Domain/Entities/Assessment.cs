@@ -8,7 +8,7 @@ public class Assessment
 
     public decimal MaxScore { get; set; }
 
-    // Share of the final grade (example: 0.30 = 30%)
+    
     public decimal Weight { get; set; }
 
     // Foreign key

@@ -29,6 +29,8 @@ using TmsApi.Infrastructure.Services;
 using TmsApi.Infrastructure.Transcripts;
 using TmsApi.Infrastructure.Workers;
 
+using Microsoft.AspNetCore.Antiforgery;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers(options =>
@@ -113,6 +115,7 @@ builder.Services.AddScoped<IEnrollmentService, EnrollmentService>();
 builder.Services.AddScoped<IReportingService, ReportingService>();
 builder.Services.AddScoped<ICourseService, CourseService>();
 builder.Services.AddScoped<ICachedCourseService, CachedCourseService>();
+builder.Services.AddScoped<IStudentService, StudentService>();
 
 builder.Services.AddTransient(
     typeof(IPipelineBehavior<,>),
@@ -267,7 +270,10 @@ builder.Services.AddRateLimiter(options =>
     };
 });
 
-
+builder.Services.AddAntiforgery(options =>
+{
+    options.HeaderName = "X-XSRF-TOKEN";
+});
 
 
 var app = builder.Build();
@@ -309,8 +315,34 @@ app.UseRateLimiter();
 app.UseAuthentication();
 
 app.UseAuthorization();
+app.UseAuthentication();
 
-app.MapHub<TmsHub>("/hubs/tms");
+app.UseAuthorization();
+
+app.Use(async (context, next) =>
+{
+    if (context.User.Identity?.IsAuthenticated == true ||
+        context.Request.Cookies.ContainsKey("tms_auth"))
+    {
+        var antiforgery = context.RequestServices
+            .GetRequiredService<IAntiforgery>();
+
+        var tokens = antiforgery.GetAndStoreTokens(context);
+
+        context.Response.Cookies.Append(
+            "XSRF-TOKEN",
+            tokens.RequestToken!,
+            new CookieOptions
+            {
+                HttpOnly = false,
+                Secure = !builder.Environment.IsDevelopment(),
+                SameSite = SameSiteMode.Strict
+            });
+    }
+
+    await next(context);
+});
+app.MapHub<TmsHub>("/hubs/tms").RequireCors("TmsClient");
 
 app.MapControllers();
 

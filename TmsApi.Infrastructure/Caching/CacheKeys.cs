@@ -7,6 +7,9 @@ public static class CacheKeys
     public static string Course(string code)
         => $"{SchemaVersion}:course:{code}";
 
+    public static string CourseById(int id)
+        => $"{SchemaVersion}:course:id:{id}";
+
     public static string CoursesAll
         => $"{SchemaVersion}:courses:all";
 
