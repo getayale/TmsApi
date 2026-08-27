@@ -30,6 +30,9 @@ using TmsApi.Infrastructure.Transcripts;
 using TmsApi.Infrastructure.Workers;
 
 using Microsoft.AspNetCore.Antiforgery;
+using TmsApi.Infrastructure.Identity;
+using Microsoft.AspNetCore.Identity;
+using TmsApi.Api.Controllers.V1;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -275,6 +278,21 @@ builder.Services.AddAntiforgery(options =>
     options.HeaderName = "X-XSRF-TOKEN";
 });
 
+
+
+builder.Services.AddIdentityCore<TmsUser>(options =>
+{
+ options.Password.RequiredLength = 12;
+options.Password.RequireUppercase = true;
+options.Password.RequireDigit = true;
+options.Password.RequireNonAlphanumeric = true;
+
+// Brute-Force Lockout Protection
+options.Lockout.MaxFailedAccessAttempts = 5;
+options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+options.Lockout.AllowedForNewUsers = true;
+}).AddRoles<IdentityRole>()
+.AddEntityFrameworkStores<TmsDbContext>();
 
 var app = builder.Build();
 
