@@ -14,6 +14,7 @@ public class TmsDbContext : IdentityDbContext<TmsUser>
     public DbSet<Student> Students => Set<Student>();
 
     public DbSet<Course> Courses => Set<Course>();
+    public DbSet<RefreshToken> RefreshTokens { get; set; }
 
     public DbSet<Enrollment> Enrollments => Set<Enrollment>();
 

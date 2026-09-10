@@ -32,7 +32,11 @@ using TmsApi.Infrastructure.Workers;
 using Microsoft.AspNetCore.Antiforgery;
 using TmsApi.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
-using TmsApi.Api.Controllers.V1;
+
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -282,7 +286,7 @@ builder.Services.AddAntiforgery(options =>
 
 builder.Services.AddIdentityCore<TmsUser>(options =>
 {
- options.Password.RequiredLength = 12;
+ options.Password.RequiredLength = 8;
 options.Password.RequireUppercase = true;
 options.Password.RequireDigit = true;
 options.Password.RequireNonAlphanumeric = true;
@@ -293,6 +297,38 @@ options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
 options.Lockout.AllowedForNewUsers = true;
 }).AddRoles<IdentityRole>()
 .AddEntityFrameworkStores<TmsDbContext>();
+
+builder.Services.AddScoped<TokenService>();
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme =
+        JwtBearerDefaults.AuthenticationScheme;
+
+    options.DefaultChallengeScheme =
+        JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters =
+        new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+
+            ValidIssuer =
+                builder.Configuration["Jwt:Issuer"],
+
+            ValidAudience =
+                builder.Configuration["Jwt:Audience"],
+
+            IssuerSigningKey =
+                new SymmetricSecurityKey(
+                    Encoding.UTF8.GetBytes(
+                        builder.Configuration["Jwt:Key"]!))
+        };
+});
 
 var app = builder.Build();
 
