@@ -19,6 +19,9 @@ public interface ICourseService
 
     Task<IReadOnlyList<Course>> GetAllAsync(
         CancellationToken ct);
+        Task<Course?> GetEntityByIdAsync(
+    int id,
+    CancellationToken ct);
 
     Task<CourseResponseDto> CreateAsync(
         CreateCourseRequest request,

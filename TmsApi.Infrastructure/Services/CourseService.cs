@@ -264,5 +264,12 @@ public async Task<Course?> GetByCodeAsync(
         .Include(c => c.Enrollments)
         .ToListAsync(ct);
 }
+public async Task<Course?> GetEntityByIdAsync(
+    int id,
+    CancellationToken ct)
+{
+    return await context.Courses
+        .FirstOrDefaultAsync(c => c.Id == id, ct);
+}
 
 }

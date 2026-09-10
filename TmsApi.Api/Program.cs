@@ -36,6 +36,7 @@ using Microsoft.AspNetCore.Identity;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using TmsApi.Api.Authorization;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -179,6 +180,8 @@ builder.Services.AddCors(options =>
             .SetPreflightMaxAge(TimeSpan.FromMinutes(10));
     });
 });
+
+
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -330,6 +333,13 @@ builder.Services.AddAuthentication(options =>
         };
 });
 
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("CanEditCourse", policy =>
+        policy.Requirements.Add(
+            new CourseInstructorRequirement()));
+
+builder.Services.AddSingleton<CourseInstructorHandler>();
+
 var app = builder.Build();
 
 app.UseExceptionHandler();
@@ -365,6 +375,27 @@ app.UseRouting();
 app.UseCors("TmsClient");
 
 app.UseRateLimiter();
+
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Append(
+        "X-Content-Type-Options",
+        "nosniff");
+
+    context.Response.Headers.Append(
+        "X-Frame-Options",
+        "DENY");
+
+    context.Response.Headers.Append(
+        "Referrer-Policy",
+        "strict-origin-when-cross-origin");
+
+    context.Response.Headers.Append(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';");
+
+    await next();
+});
 
 app.UseAuthentication();
 

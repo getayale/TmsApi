@@ -10,8 +10,10 @@ public class Course
 
     public int MaxCapacity { get; set; }
 
+    // Lead instructor assigned to this course.
+    public string? InstructorId { get; set; }
 
-    // One course can have many enrollments
+    // One course can have many enrollments.
     public ICollection<Enrollment> Enrollments { get; set; }
         = new List<Enrollment>();
 }

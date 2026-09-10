@@ -4,7 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using TmsApi.Application.Courses.Commands;
 using TmsApi.Application.Courses.Queries;
 using TmsApi.Application.DTOs;
-
+using TmsApi.Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 
 namespace TmsApi.Controllers.V2;
 
@@ -13,7 +14,7 @@ namespace TmsApi.Controllers.V2;
 [Route("api/v{version:apiVersion}/courses")]
 [ApiVersion("2.0")]
 public class CoursesController(
-    IMediator mediator)
+    IMediator mediator,ICourseService courseService,IAuthorizationService authorizationService)
     : ControllerBase
 {
 
@@ -130,31 +131,39 @@ public async Task<IActionResult> CreateCourse(
         result);
 }
 
-    [HttpPut("{id:int}")]
-    public async Task<IActionResult> UpdateCourse(
-        int id,
-        [FromBody] UpdateCourseRequest request,
-        CancellationToken ct)
-    {
+   [Authorize(Roles = "Instructor,Admin")]
+[HttpPut("{id:int}")]
+public async Task<IActionResult> UpdateCourse(
+    int id,
+    [FromBody] UpdateCourseRequest request,
+    CancellationToken ct)
+{
+    var course = await courseService.GetEntityByIdAsync(id, ct);
 
-        var result = await mediator.Send(
-            new UpdateCourseCommand(
-                id,
-                request.Code,
-                request.Title,
-                request.MaxCapacity),
-            ct);
+    if (course is null)
+        return NotFound();
 
+    var authorizationResult =
+        await authorizationService.AuthorizeAsync(
+            User,
+            course,
+            "CanEditCourse");
 
+    if (!authorizationResult.Succeeded)
+        return Forbid();
 
-        if (!result)
-        {
-            return NotFound();
-        }
+    var result = await mediator.Send(
+        new UpdateCourseCommand(
+            id,
+            request.Code,
+            request.Title,
+            request.MaxCapacity), ct);
 
+    if (!result)
+        return NotFound();
 
-        return NoContent();
-    }
+    return NoContent();
+}
 
 
     [HttpDelete("{id:int}")]
@@ -173,4 +182,5 @@ public async Task<IActionResult> DeleteCourse(
 
     return NoContent();
 }
+
 }
